@@ -1,4 +1,3 @@
-
 import 'mybatteryplugin_platform_interface.dart';
 
 class Mybatteryplugin {
@@ -8,5 +7,9 @@ class Mybatteryplugin {
 
   Future<num?> getBatteryLevel() {
     return MybatterypluginPlatform.instance.getBatteryLevel();
+  }
+
+  Stream? getBatteryLevelStream() {
+    return MybatterypluginPlatform.instance.getBatteryLevelStream();
   }
 }
