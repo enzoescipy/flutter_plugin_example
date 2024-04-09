@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:mybatteryplugin/mybatteryplugin.dart';
@@ -14,20 +16,27 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  // plugin instanciation 
+  // plugin instanciation
   final _mybatterypluginPlugin = Mybatteryplugin();
 
   // this is where we will store the battery level
   num? _batteryLevel;
+  StreamSubscription? _batteryLevelSubscription;
 
   @override
   void initState() {
     super.initState();
 
-    // execute the method to retrieve the battery level
-    _mybatterypluginPlugin.getBatteryLevel().then((batteryLevel) {
+    // // execute the method to retrieve the battery level
+    // _mybatterypluginPlugin.getBatteryLevel().then((batteryLevel) {
+    //   setState(() {
+    //     _batteryLevel = batteryLevel;
+    //   });
+    // });
+
+    _batteryLevelSubscription = _mybatterypluginPlugin.getBatteryLevelStream()?.listen((event) {
       setState(() {
-        _batteryLevel = batteryLevel;
+        _batteryLevel = event;
       });
     });
   }
@@ -38,9 +47,7 @@ class _MyAppState extends State<MyApp> {
       home: Scaffold(
         body: Center(
           // we display the battery level
-          child: _batteryLevel != null
-              ? Text('배터리 레벨: $_batteryLevel')
-              : const CircularProgressIndicator(),
+          child: _batteryLevel != null ? Text('배터리 레벨: $_batteryLevel') : const CircularProgressIndicator(),
         ),
       ),
     );

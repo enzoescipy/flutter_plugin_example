@@ -10,7 +10,9 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
-import kotlinx.coroutines.DisposableHandle
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+import io.reactivex.rxjava3.core.Single
+import io.reactivex.rxjava3.disposables.Disposable
 import io.reactivex.rxjava3.observables.ConnectableObservable
 import java.util.concurrent.TimeUnit
 
@@ -24,7 +26,7 @@ class MybatterypluginPlugin: FlutterPlugin, MethodCallHandler {
   private lateinit var batteryManager: BatteryManager
 
   private lateinit var eventChannel : EventChannel
-  private var disposableHandle: DisposableHandle? = null
+  private var disposable: Disposable? = null
 
   private val BATTERY_LEVEL_EVENT_CHANNEL_NAME = "battery_level_event_channel_name"
 
@@ -38,20 +40,42 @@ class MybatterypluginPlugin: FlutterPlugin, MethodCallHandler {
     eventChannel.setStreamHandler(object: EventChannel.StreamHandler {
       @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
       override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-        if (disposableHandle == null) {
-          disposableHandle = ConnectableObservable.interval(0L, 1000L, TimeUnit.MILLISECONDS ).flatMapSingle { Single.create<Int> {
-            try {
-              val batteryLevel = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
-              it.onSuccess(batteryLevel)
-            } catch (e:Exception) {
-              it.onError(e)
-            }
-          } }
-        }
+        observeBatteryLevel(events)
+      }
+
+      override fun onCancel(arguments: Any?) {
+        disposable?.dispose()
       }
     })
   }
 
+  @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
+  private fun observeBatteryLevel(events: EventChannel.EventSink?) {
+    if (disposable == null) {
+      disposable = ConnectableObservable.interval(0L, 1000L, TimeUnit.MILLISECONDS)
+        .flatMapSingle {
+        Single.create{
+          try {
+            val batteryLevel = getBatteryLevel()
+            it.onSuccess(batteryLevel)
+          } catch (e: Exception) {
+            it.onError(e)
+          }
+        }
+      }.doFinally {
+        disposable = null
+      } .observeOn(AndroidSchedulers.mainThread()).subscribe({
+          events?.success(it)
+        }, {
+          events?.error(it.javaClass.simpleName, it.message, null)
+        })
+    }
+  }
+
+  @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
+  private fun getBatteryLevel(): Int {
+    return batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+  }
   override fun onMethodCall(call: MethodCall, result: Result) {
     if (call.method == "getBatteryLevel") {
       if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
@@ -67,5 +91,8 @@ class MybatterypluginPlugin: FlutterPlugin, MethodCallHandler {
 
   override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
     channel.setMethodCallHandler(null)
+
+    eventChannel.setStreamHandler(null)
+    disposable?.dispose()
   }
 }
